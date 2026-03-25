@@ -5,6 +5,7 @@ data/
 # Secrets
 .env
 keys/
+cosign.key
 /tmp/
 
 # Python
