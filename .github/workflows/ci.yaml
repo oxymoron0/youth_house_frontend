@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
     tags: ['v*']
 
 env:
@@ -35,8 +36,9 @@ jobs:
         with:
           images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern=v{{version}}
-            type=semver,pattern=v{{major}}.{{minor}}
+            type=sha,prefix=main-,enable=${{ github.ref_type == 'branch' }}
+            type=semver,pattern=v{{version}},enable=${{ github.ref_type == 'tag' }}
+            type=semver,pattern=v{{major}}.{{minor}},enable=${{ github.ref_type == 'tag' }}
           flavor: |
             latest=false
 
