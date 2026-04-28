@@ -3,6 +3,7 @@ import MapProvider, { useMap } from './map/MapProvider';
 import LeftPanel from './components/LeftPanel';
 import HousingList from './components/HousingList';
 import HousingDetailView from './components/HousingDetailView';
+import HousingLayer from './components/HousingLayer';
 import StationLayer from './components/StationLayer';
 import SyncStatusIndicator from './components/SyncStatusIndicator';
 import { useLines } from './hooks/useLines';
@@ -82,7 +83,14 @@ function AppContent() {
 
   const handleSelectHousing = useCallback((homeCode: string) => {
     setSelectedHomeCode(homeCode);
-  }, []);
+    const housing = housings.find((h) => h.home_code === homeCode);
+    if (housing?.longitude != null && housing?.latitude != null && map) {
+      map.panTo(new naver.maps.LatLng(housing.latitude, housing.longitude), {
+        duration: 1500,
+        easing: 'easeOutCubic',
+      });
+    }
+  }, [housings, map]);
 
   const handleBackToHousingList = useCallback(() => {
     setSelectedHomeCode(null);
@@ -98,6 +106,12 @@ function AppContent() {
         data={stationsGeo}
         visibleLines={visibleLines}
         onStationClick={handleStationClick}
+      />
+      <HousingLayer
+        housings={housings}
+        checkedHomes={checkedHomes}
+        selectedHomeCode={selectedHomeCode}
+        onHousingClick={handleSelectHousing}
       />
       <LeftPanel
         activeTab={activeTab}
