@@ -51,9 +51,25 @@ export default function MapProvider({ children }: { children?: ReactNode }) {
 
   return (
     <MapContext.Provider value={map}>
-      <div ref={containerRef} className="absolute inset-0" />
+      <div
+        ref={containerRef}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+      />
       {error && (
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded bg-red-50 px-4 py-2 text-sm text-red-700 shadow">
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            padding: '0.5rem 1rem',
+            background: '#fef2f2',
+            color: '#b91c1c',
+            borderRadius: '0.25rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,.15)',
+            fontSize: '0.875rem',
+          }}
+        >
           지도를 불러오지 못했습니다: {error}
         </div>
       )}
