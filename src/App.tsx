@@ -1,15 +1,21 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import MapProvider from './map/MapProvider';
+import MapProvider, { useMap } from './map/MapProvider';
 import LeftPanel from './components/LeftPanel';
 import HousingList from './components/HousingList';
 import HousingDetailView from './components/HousingDetailView';
+import StationLayer from './components/StationLayer';
 import SyncStatusIndicator from './components/SyncStatusIndicator';
 import { useLines } from './hooks/useLines';
 import { useHousings } from './hooks/useHousings';
+import { useStations } from './hooks/useStations';
 import { AUTO_CHECK_STATUSES } from './types/housing';
 
+const SEARCH_FOCUS_ZOOM = 15;
+
 function AppContent() {
+  const map = useMap();
   const { lines, loading: linesLoading } = useLines();
+  const { data: stationsGeo } = useStations();
 
   const [activeTab, setActiveTab] = useState<'housing' | 'lines'>('housing');
   const [visibleLines, setVisibleLines] = useState<Set<number>>(new Set());
@@ -48,11 +54,21 @@ function AppContent() {
     });
   }, []);
 
+  const handleStationClick = useCallback((_stationId: number) => {
+    /* station detail wiring restored when ExitLayer ports */
+  }, []);
+
   const handleSearchSelect = useCallback(
-    (_stationId: number, _lon: number, _lat: number) => {
-      /* station + camera wiring restored when StationLayer ports */
+    (stationId: number, lon: number, lat: number) => {
+      if (map) {
+        map.morph(new naver.maps.LatLng(lat, lon), SEARCH_FOCUS_ZOOM, {
+          duration: 1500,
+          easing: 'easeOutCubic',
+        });
+      }
+      handleStationClick(stationId);
     },
-    [],
+    [map, handleStationClick],
   );
 
   const handleToggleHomeCheck = useCallback((homeCode: string) => {
@@ -78,6 +94,11 @@ function AppContent() {
 
   return (
     <>
+      <StationLayer
+        data={stationsGeo}
+        visibleLines={visibleLines}
+        onStationClick={handleStationClick}
+      />
       <LeftPanel
         activeTab={activeTab}
         onTabChange={setActiveTab}
