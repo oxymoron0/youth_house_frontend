@@ -5,10 +5,17 @@ import HousingList from './components/HousingList';
 import HousingDetailView from './components/HousingDetailView';
 import HousingLayer from './components/HousingLayer';
 import StationLayer from './components/StationLayer';
+import ExitLayer from './components/ExitLayer';
+import NearStationHighlight from './components/NearStationHighlight';
+import SeoulDistrictLayer from './components/SeoulDistrictLayer';
 import SyncStatusIndicator from './components/SyncStatusIndicator';
 import { useLines } from './hooks/useLines';
 import { useHousings } from './hooks/useHousings';
 import { useStations } from './hooks/useStations';
+import { useSeoulDistricts } from './hooks/useSeoulDistricts';
+import { fetchStationDetail } from './api/client';
+import type { StationDetail } from './types';
+import type { NearbyStation } from './types/housing';
 import { AUTO_CHECK_STATUSES } from './types/housing';
 
 const SEARCH_FOCUS_ZOOM = 15;
@@ -17,14 +24,20 @@ function AppContent() {
   const map = useMap();
   const { lines, loading: linesLoading } = useLines();
   const { data: stationsGeo } = useStations();
+  const seoulDistricts = useSeoulDistricts();
 
   const [activeTab, setActiveTab] = useState<'housing' | 'lines'>('housing');
   const [visibleLines, setVisibleLines] = useState<Set<number>>(new Set());
+  const [selectedStation, setSelectedStation] = useState<StationDetail | null>(null);
+  const [districtEnabled, _setDistrictEnabled] = useState(false);
+  const [visibleDistricts, setVisibleDistricts] = useState<Set<string>>(new Set());
   const initRef = useRef(false);
+  const districtInitRef = useRef(false);
 
   const { housings } = useHousings();
   const [checkedHomes, setCheckedHomes] = useState<Set<string>>(new Set());
   const [selectedHomeCode, setSelectedHomeCode] = useState<string | null>(null);
+  const [nearbyStations, setNearbyStations] = useState<NearbyStation[]>([]);
   const [housingPage, setHousingPage] = useState(1);
   const housingInitRef = useRef(false);
 
@@ -34,6 +47,13 @@ function AppContent() {
       setVisibleLines(new Set(lines.map((l) => l.line_id)));
     }
   }, [lines]);
+
+  useEffect(() => {
+    if (seoulDistricts && !districtInitRef.current) {
+      districtInitRef.current = true;
+      setVisibleDistricts(new Set(seoulDistricts.features.map((f) => f.properties.code)));
+    }
+  }, [seoulDistricts]);
 
   useEffect(() => {
     if (housings.length > 0 && !housingInitRef.current) {
@@ -55,8 +75,10 @@ function AppContent() {
     });
   }, []);
 
-  const handleStationClick = useCallback((_stationId: number) => {
-    /* station detail wiring restored when ExitLayer ports */
+  const handleStationClick = useCallback((stationId: number) => {
+    fetchStationDetail(stationId)
+      .then((detail) => setSelectedStation(detail))
+      .catch(() => setSelectedStation(null));
   }, []);
 
   const handleSearchSelect = useCallback(
@@ -94,10 +116,11 @@ function AppContent() {
 
   const handleBackToHousingList = useCallback(() => {
     setSelectedHomeCode(null);
+    setNearbyStations([]);
   }, []);
 
-  const handleNearbyStationsLoaded = useCallback(() => {
-    /* consumed by NearStationHighlight when it ports */
+  const handleNearbyStationsLoaded = useCallback((stations: NearbyStation[]) => {
+    setNearbyStations(stations);
   }, []);
 
   return (
@@ -107,11 +130,21 @@ function AppContent() {
         visibleLines={visibleLines}
         onStationClick={handleStationClick}
       />
+      <ExitLayer
+        exits={selectedStation?.exits ?? []}
+        stationId={selectedStation?.station_id ?? null}
+      />
       <HousingLayer
         housings={housings}
         checkedHomes={checkedHomes}
         selectedHomeCode={selectedHomeCode}
         onHousingClick={handleSelectHousing}
+      />
+      <NearStationHighlight nearbyStations={nearbyStations} />
+      <SeoulDistrictLayer
+        data={seoulDistricts}
+        visible={districtEnabled}
+        visibleDistricts={districtEnabled ? visibleDistricts : null}
       />
       <LeftPanel
         activeTab={activeTab}

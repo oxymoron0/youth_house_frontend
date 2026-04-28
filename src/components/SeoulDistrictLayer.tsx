@@ -1,16 +1,7 @@
 import { useEffect, useRef } from 'react';
-import {
-  GeoJsonDataSource,
-  Color,
-  HeightReference,
-  LabelGraphics,
-  LabelStyle,
-  VerticalOrigin,
-  Cartesian3,
-  DistanceDisplayCondition,
-} from 'cesium';
-import { useViewer } from './MetroViewer';
-import type { SeoulDistrictCollection, SeoulDistrictFeature } from '../hooks/useSeoulDistricts';
+import { useMap } from '../map/MapProvider';
+import { polygonToPaths, polygonCentroid, type PolygonCoordinates } from '../map/geojsonToPaths';
+import type { SeoulDistrictCollection } from '../hooks/useSeoulDistricts';
 
 interface SeoulDistrictLayerProps {
   data: SeoulDistrictCollection | null;
@@ -18,90 +9,80 @@ interface SeoulDistrictLayerProps {
   visibleDistricts: Set<string> | null;
 }
 
-function computeCentroid(coords: number[][][]): [number, number] {
-  const ring = coords[0]!;
-  let lonSum = 0;
-  let latSum = 0;
-  for (const pt of ring) {
-    lonSum += pt[0]!;
-    latSum += pt[1]!;
-  }
-  return [lonSum / ring.length, latSum / ring.length];
+interface DistrictMeta {
+  code: string;
+  polygon: naver.maps.Polygon;
+  label: naver.maps.Marker;
+}
+
+const FILL = '#FFD700';
+const FILL_OPACITY = 0.15;
+const STROKE = '#DAA520';
+const STROKE_WEIGHT = 2;
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function buildLabelIcon(name: string): naver.maps.HtmlIcon {
+  const content =
+    `<div style="position:relative;width:1px;height:1px;">` +
+      `<div style="position:absolute;top:0;left:0;transform:translate(-50%,-50%);font:bold 13px sans-serif;color:#fff;text-shadow:1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000;white-space:nowrap;pointer-events:none;">` +
+        escapeHtml(name) +
+      `</div>` +
+    `</div>`;
+  return { content, anchor: new naver.maps.Point(0, 0) };
 }
 
 export default function SeoulDistrictLayer({ data, visible, visibleDistricts }: SeoulDistrictLayerProps) {
-  const viewer = useViewer();
-  const dsRef = useRef<GeoJsonDataSource | null>(null);
+  const map = useMap();
+  const metasRef = useRef<DistrictMeta[]>([]);
 
   useEffect(() => {
-    if (!viewer || !data) return;
+    if (!map || !data) return;
 
-    const fillColor = Color.YELLOW.withAlpha(0.15);
-    const strokeColor = Color.fromCssColorString('#DAA520');
-
-    GeoJsonDataSource.load(data as unknown as Record<string, unknown>, {
-      fill: fillColor,
-      stroke: strokeColor,
-      strokeWidth: 2,
-      clampToGround: true,
-    }).then((ds) => {
-      for (const entity of ds.entities.values) {
-        const name = entity.properties?.name?.getValue() as string | undefined;
-        if (!name) continue;
-
-        const feature = data.features.find(
-          (f: SeoulDistrictFeature) => f.properties.name === name,
-        );
-        if (!feature) continue;
-
-        const [lon, lat] = computeCentroid(feature.geometry.coordinates);
-
-        const labelEntity = ds.entities.add({
-          position: Cartesian3.fromDegrees(lon, lat),
-          label: new LabelGraphics({
-            text: name,
-            font: 'bold 13px sans-serif',
-            style: LabelStyle.FILL_AND_OUTLINE,
-            outlineWidth: 2,
-            outlineColor: Color.BLACK,
-            fillColor: Color.WHITE,
-            verticalOrigin: VerticalOrigin.CENTER,
-            heightReference: HeightReference.CLAMP_TO_GROUND,
-            distanceDisplayCondition: new DistanceDisplayCondition(0, 80000),
-          }),
-          properties: { code: feature.properties.code } as unknown as Record<string, unknown>,
-        });
-        labelEntity.show = true;
-      }
-
-      ds.show = visible;
-      viewer.dataSources.add(ds);
-      dsRef.current = ds;
+    const metas: DistrictMeta[] = data.features.map((feature) => {
+      const coords = feature.geometry.coordinates as PolygonCoordinates;
+      const polygon = new naver.maps.Polygon({
+        paths: polygonToPaths(coords),
+        fillColor: FILL,
+        fillOpacity: FILL_OPACITY,
+        strokeColor: STROKE,
+        strokeWeight: STROKE_WEIGHT,
+        clickable: false,
+      });
+      const [lon, lat] = polygonCentroid(coords);
+      const label = new naver.maps.Marker({
+        position: new naver.maps.LatLng(lat, lon),
+        icon: buildLabelIcon(feature.properties.name),
+        clickable: false,
+        zIndex: 50,
+      });
+      return { code: feature.properties.code, polygon, label };
     });
+    metasRef.current = metas;
 
     return () => {
-      if (dsRef.current && viewer.dataSources.contains(dsRef.current)) {
-        viewer.dataSources.remove(dsRef.current, true);
+      for (const m of metas) {
+        m.polygon.setMap(null);
+        m.label.setMap(null);
       }
-      dsRef.current = null;
+      metasRef.current = [];
     };
-  }, [viewer, data]);
+  }, [map, data]);
 
   useEffect(() => {
-    if (!dsRef.current) return;
-    dsRef.current.show = visible;
-  }, [visible]);
-
-  useEffect(() => {
-    if (!dsRef.current || !visibleDistricts) return;
-
-    for (const entity of dsRef.current.entities.values) {
-      const code = entity.properties?.code?.getValue() as string | undefined;
-      if (code) {
-        entity.show = visibleDistricts.has(code);
-      }
+    if (!map) return;
+    for (const m of metasRef.current) {
+      const districtVisible = visible && (visibleDistricts === null || visibleDistricts.has(m.code));
+      m.polygon.setMap(districtVisible ? map : null);
+      m.label.setMap(districtVisible ? map : null);
     }
-  }, [visibleDistricts]);
+  }, [map, visible, visibleDistricts]);
 
   return null;
 }
