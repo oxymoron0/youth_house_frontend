@@ -25,7 +25,7 @@ export default function LeftPanel({
   children,
 }: LeftPanelProps) {
   return (
-    <div className="absolute left-3 top-3 z-10 flex max-h-[calc(100vh-1.5rem)] w-72 flex-col rounded-lg bg-white/95 shadow-lg backdrop-blur">
+    <div className="absolute left-[52px] top-3 z-10 flex max-h-[calc(100vh-1.5rem)] w-72 flex-col rounded-lg bg-white/95 shadow-lg backdrop-blur">
       {/* Tab bar */}
       <div className="flex border-b border-gray-200 px-1 pt-1">
         <button
